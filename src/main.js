@@ -1,0 +1,288 @@
+import './style.css';
+import { CONFIG } from './game/config.js';
+import { createLevel, resetLevel } from './game/level.js';
+import { createGameState, updateGame, levelProgress, computeScore } from './game/state.js';
+import { InputController } from './game/input.js';
+import { AudioEngine } from './game/audio.js';
+import { loadBest, saveBest } from './game/storage.js';
+
+const FIXED_STEP = 1 / 120;
+const MAX_FRAME = 0.1;
+
+const el = (id) => document.getElementById(id);
+
+function webglAvailable() {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl2') || canvas.getContext('webgl'))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function formatTime(seconds) {
+  const total = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+async function boot() {
+  if (!webglAvailable()) {
+    el('webgl-error').hidden = false;
+    return;
+  }
+
+  let World;
+  try {
+    ({ World } = await import('./game/world.js'));
+  } catch (error) {
+    console.error(error);
+    el('webgl-error').hidden = false;
+    return;
+  }
+
+  const reducedMotion =
+    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+
+  const level = createLevel();
+  let state = createGameState(level, CONFIG);
+  let world;
+  try {
+    world = new World(el('scene'), level, { reducedMotion });
+  } catch (error) {
+    console.error(error);
+    el('webgl-error').hidden = false;
+    return;
+  }
+
+  const input = new InputController();
+  input.attach(window);
+  const audio = new AudioEngine();
+
+  const ui = {
+    hud: el('hud'),
+    coins: el('coin-count'),
+    deaths: el('death-count'),
+    time: el('time-count'),
+    progressBar: el('progress-bar'),
+    progressFill: el('progress-fill'),
+    title: el('title-screen'),
+    pause: el('pause-screen'),
+    victory: el('victory-screen'),
+    victorySummary: el('victory-summary'),
+    victoryBest: el('victory-best'),
+    bestRun: el('best-run'),
+    toast: el('toast'),
+    touch: el('touch-controls'),
+    soundToggle: el('sound-toggle')
+  };
+
+  const supportsTouch =
+    window.matchMedia?.('(pointer: coarse)')?.matches || 'ontouchstart' in window;
+
+  let mode = 'title'; // title | playing | paused | victory
+  let toastTimer = 0;
+
+  const best = loadBest();
+  if (best) {
+    ui.bestRun.hidden = false;
+    ui.bestRun.textContent = `Best run: ${best.score} points · ${best.coins} coins · ${formatTime(best.time)}`;
+  }
+
+  function showToast(message) {
+    ui.toast.textContent = message;
+    ui.toast.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => ui.toast.classList.remove('is-visible'), 1800);
+  }
+
+  function refreshHud() {
+    ui.coins.textContent = `${state.coinsCollected} / ${level.totalCoins}`;
+    ui.deaths.textContent = String(state.deaths);
+    ui.time.textContent = formatTime(state.elapsed);
+    const progress = Math.round(levelProgress(state) * 100);
+    ui.progressFill.style.width = `${progress}%`;
+    ui.progressBar.setAttribute('aria-valuenow', String(progress));
+  }
+
+  function startRun() {
+    resetLevel(level);
+    state = createGameState(level, CONFIG);
+    refreshHud();
+  }
+
+  function setMode(next) {
+    mode = next;
+    ui.title.hidden = next !== 'title';
+    ui.pause.hidden = next !== 'paused';
+    ui.victory.hidden = next !== 'victory';
+    ui.hud.hidden = next === 'title';
+    ui.touch.hidden = !supportsTouch || next !== 'playing';
+  }
+
+  function handleEvents(events) {
+    for (const event of events) {
+      switch (event.type) {
+        case 'jump':
+        case 'doubleJump':
+          audio.play(event.type);
+          break;
+        case 'coin':
+          audio.play('coin');
+          world.spawnSparkle(event.coin);
+          break;
+        case 'stomp':
+          audio.play('stomp');
+          break;
+        case 'checkpoint':
+          audio.play('checkpoint');
+          showToast('Checkpoint saved!');
+          break;
+        case 'death':
+          audio.play('death');
+          showToast(
+            event.cause === 'fall' ? 'Whoops — back to the last flag!' : 'Ouch! Try again.'
+          );
+          break;
+        case 'victory':
+          audio.play('victory');
+          finishRun();
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  function finishRun() {
+    const score = computeScore(state);
+    const record = { score, coins: state.coinsCollected, time: Math.round(state.elapsed) };
+    const stored = saveBest(record);
+    ui.victorySummary.textContent = `${state.coinsCollected} of ${level.totalCoins} sky coins · ${formatTime(state.elapsed)} · ${state.deaths} falls · ${score} points`;
+    if (stored) {
+      ui.victoryBest.hidden = false;
+      ui.victoryBest.textContent =
+        stored.score === score ? 'New personal best saved on this device!' : `Personal best: ${stored.score} points`;
+    } else {
+      ui.victoryBest.hidden = true;
+    }
+    setMode('victory');
+  }
+
+  // --- Touch controls -------------------------------------------------------
+  const stick = el('stick');
+  const knob = el('stick-knob');
+  let stickPointer = null;
+
+  const stickMove = (event) => {
+    if (stickPointer !== event.pointerId) return;
+    const rect = stick.getBoundingClientRect();
+    const radius = rect.width / 2;
+    const dx = (event.clientX - (rect.left + radius)) / radius;
+    const dy = (event.clientY - (rect.top + radius)) / radius;
+    const clampedX = Math.max(-1, Math.min(1, dx));
+    const clampedY = Math.max(-1, Math.min(1, dy));
+    input.setTouchAxis(clampedX, -clampedY);
+    knob.style.transform = `translate(${clampedX * radius * 0.5}px, ${clampedY * radius * 0.5}px)`;
+  };
+
+  const stickEnd = (event) => {
+    if (stickPointer !== event.pointerId) return;
+    stickPointer = null;
+    input.setTouchAxis(0, 0);
+    knob.style.transform = '';
+  };
+
+  stick.addEventListener('pointerdown', (event) => {
+    stickPointer = event.pointerId;
+    stick.setPointerCapture(event.pointerId);
+    stickMove(event);
+  });
+  stick.addEventListener('pointermove', stickMove);
+  stick.addEventListener('pointerup', stickEnd);
+  stick.addEventListener('pointercancel', stickEnd);
+
+  const jumpButton = el('touch-jump');
+  jumpButton.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    input.setTouchJump(true);
+  });
+  const releaseJump = () => input.setTouchJump(false);
+  jumpButton.addEventListener('pointerup', releaseJump);
+  jumpButton.addEventListener('pointerleave', releaseJump);
+  jumpButton.addEventListener('pointercancel', releaseJump);
+
+  // --- UI wiring ------------------------------------------------------------
+  function beginGame() {
+    audio.start();
+    startRun();
+    setMode('playing');
+  }
+
+  el('start-button').addEventListener('click', beginGame);
+  el('play-again-button').addEventListener('click', beginGame);
+  el('resume-button').addEventListener('click', () => setMode('playing'));
+  el('restart-button').addEventListener('click', beginGame);
+  el('pause-button').addEventListener('click', () => togglePause());
+
+  function togglePause() {
+    if (mode === 'playing') setMode('paused');
+    else if (mode === 'paused') setMode('playing');
+  }
+  input.onPause = () => {
+    if (mode === 'title' || mode === 'victory') return;
+    togglePause();
+  };
+  input.onInteract = () => audio.start();
+
+  ui.soundToggle.addEventListener('click', () => {
+    audio.start();
+    const enabled = ui.soundToggle.getAttribute('aria-pressed') !== 'true';
+    ui.soundToggle.setAttribute('aria-pressed', String(enabled));
+    ui.soundToggle.setAttribute('aria-label', enabled ? 'Sound on' : 'Sound off');
+    ui.soundToggle.textContent = enabled ? '🔊' : '🔈';
+    audio.setEnabled(enabled);
+  });
+
+  window.addEventListener('resize', () => world.resize());
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && mode === 'playing') setMode('paused');
+  });
+
+  // --- Main loop ------------------------------------------------------------
+  let last = performance.now();
+  let accumulator = 0;
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, MAX_FRAME);
+    last = now;
+
+    if (mode === 'playing') {
+      accumulator += dt;
+      const sample = input.sample();
+      let stepInput = sample;
+      while (accumulator >= FIXED_STEP) {
+        handleEvents(updateGame(state, stepInput, FIXED_STEP));
+        // Jump edges are only consumed by the first sub-step.
+        stepInput = { ...stepInput, jumpPressed: false };
+        accumulator -= FIXED_STEP;
+        if (mode !== 'playing') break;
+      }
+      refreshHud();
+      world.update(state, dt);
+    } else {
+      world.update(state, dt);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  refreshHud();
+  setMode('title');
+  world.resize();
+  requestAnimationFrame(frame);
+}
+
+boot();
