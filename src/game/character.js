@@ -79,6 +79,8 @@ export function createCharacter() {
     const bob = calm ? 0 : Math.sin(time * 6) * 0.03 * stride;
     body.position.y = 0.05 + bob;
     head.position.y = 0.62 + bob * 1.2;
+    // Squash & stretch: the horizontal scale moves opposite to the vertical one
+    // (2 - stretch) so the hero keeps roughly the same volume while jumping.
     const stretch = grounded ? 1 : THREE.MathUtils.clamp(1 + verticalVelocity * 0.012, 0.85, 1.15);
     group.scale.set(2 - stretch, stretch, 2 - stretch);
     if (!calm) parts.tuft.rotation.z = Math.sin(time * 4) * 0.15;

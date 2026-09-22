@@ -32,7 +32,7 @@ buffering make edge jumps forgiving.
 
 ## Run it locally
 
-Requires Node.js 20 or newer.
+Requires Node.js 22.12 or newer (the pinned Vite and Vitest versions need it).
 
 ```bash
 npm install     # install dependencies

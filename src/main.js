@@ -271,10 +271,9 @@ async function boot() {
         if (mode !== 'playing') break;
       }
       refreshHud();
-      world.update(state, dt);
-    } else {
-      world.update(state, dt);
     }
+
+    world.update(state, dt);
 
     requestAnimationFrame(frame);
   }
