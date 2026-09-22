@@ -25,18 +25,20 @@ export function stickRadius(rect) {
  * @param {{left: number, top: number, width: number, height: number}} rect
  * @param {number} clientX
  * @param {number} clientY
- * @returns {{x: number, z: number}} clamped axis in the range [-1, 1]
+ * @returns {{x: number, z: number, radius: number}} clamped axis in the range
+ *   [-1, 1] plus the stick radius used, so callers (e.g. the knob transform)
+ *   don't need to recompute it from the rect.
  */
 export function computeStickAxis(rect, clientX, clientY) {
   const radius = stickRadius(rect);
-  if (radius <= 0) return { x: 0, z: 0 };
-  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return { x: 0, z: 0 };
+  if (radius <= 0) return { x: 0, z: 0, radius };
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return { x: 0, z: 0, radius };
 
   const dx = (clientX - (rect.left + radius)) / radius;
   const dy = (clientY - (rect.top + radius)) / radius;
-  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return { x: 0, z: 0 };
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return { x: 0, z: 0, radius };
 
   const x = Math.max(-1, Math.min(1, dx));
   const z = Math.max(-1, Math.min(1, dy));
-  return { x, z };
+  return { x, z, radius };
 }

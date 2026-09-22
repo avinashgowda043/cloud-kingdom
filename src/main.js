@@ -5,7 +5,7 @@ import { createGameState, updateGame, levelProgress, computeScore } from './game
 import { InputController } from './game/input.js';
 import { AudioEngine } from './game/audio.js';
 import { loadBest, saveBest } from './game/storage.js';
-import { computeStickAxis, stickRadius } from './game/touch.js';
+import { computeStickAxis } from './game/touch.js';
 
 const FIXED_STEP = 1 / 120;
 const MAX_FRAME = 0.1;
@@ -191,9 +191,8 @@ async function boot() {
   const stickMove = (event) => {
     if (stickPointer !== event.pointerId) return;
     const rect = stick.getBoundingClientRect();
-    const { x: clampedX, z: clampedY } = computeStickAxis(rect, event.clientX, event.clientY);
+    const { x: clampedX, z: clampedY, radius } = computeStickAxis(rect, event.clientX, event.clientY);
     input.setTouchAxis(clampedX, -clampedY);
-    const radius = stickRadius(rect);
     knob.style.transform = `translate(${clampedX * radius * 0.5}px, ${clampedY * radius * 0.5}px)`;
   };
 
@@ -284,10 +283,17 @@ async function boot() {
     ui.hud.hidden = true;
     ui.touch.hidden = true;
     const banner = el('runtime-error');
+    const messages = {
+      webglcontextlost:
+        'The graphics context was lost (this can happen when the GPU is under heavy load or memory pressure). Your progress in this run was paused so nothing keeps happening off-screen.',
+      'player-nonfinite':
+        'The 3D view stopped because the player position became invalid. Your progress in this run was paused so nothing keeps happening off-screen.',
+      'camera-nonfinite':
+        'The 3D view stopped because the camera position became invalid. Your progress in this run was paused so nothing keeps happening off-screen.'
+    };
     el('runtime-error-message').textContent =
-      reason === 'webglcontextlost'
-        ? 'The graphics context was lost (this can happen when the GPU is under heavy load or memory pressure). Your progress in this run was paused so nothing keeps happening off-screen.'
-        : 'The 3D view stopped unexpectedly. Your progress in this run was paused so nothing keeps happening off-screen.';
+      messages[reason] ||
+      'The 3D view stopped unexpectedly. Your progress in this run was paused so nothing keeps happening off-screen.';
     banner.hidden = false;
   }
 
@@ -328,6 +334,7 @@ async function boot() {
     const dt = Math.min((now - last) / 1000, MAX_FRAME);
     last = now;
 
+    let failureReason = 'frame-exception';
     try {
       if (mode === 'playing') {
         accumulator += dt;
@@ -343,6 +350,7 @@ async function boot() {
 
         const p = state.player.position;
         if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) {
+          failureReason = 'player-nonfinite';
           throw new Error('Player position became non-finite');
         }
 
@@ -356,10 +364,11 @@ async function boot() {
       // otherwise render a blank/garbled frame without ever throwing.
       const cam = world.camera.position;
       if (!Number.isFinite(cam.x) || !Number.isFinite(cam.y) || !Number.isFinite(cam.z)) {
+        failureReason = 'camera-nonfinite';
         throw new Error('Camera position became non-finite');
       }
     } catch (error) {
-      haltAfterFailure('frame-exception', error);
+      haltAfterFailure(failureReason, error);
       return;
     }
 
