@@ -283,17 +283,15 @@ async function boot() {
     ui.hud.hidden = true;
     ui.touch.hidden = true;
     const banner = el('runtime-error');
-    const messages = {
+    const pausedSuffix = 'Your progress in this run was paused so nothing keeps happening off-screen.';
+    const prefixes = {
       webglcontextlost:
-        'The graphics context was lost (this can happen when the GPU is under heavy load or memory pressure). Your progress in this run was paused so nothing keeps happening off-screen.',
-      'player-nonfinite':
-        'The 3D view stopped because the player position became invalid. Your progress in this run was paused so nothing keeps happening off-screen.',
-      'camera-nonfinite':
-        'The 3D view stopped because the camera position became invalid. Your progress in this run was paused so nothing keeps happening off-screen.'
+        'The graphics context was lost (this can happen when the GPU is under heavy load or memory pressure).',
+      'player-nonfinite': 'The 3D view stopped because the player position became invalid.',
+      'camera-nonfinite': 'The 3D view stopped because the camera position became invalid.',
+      'frame-exception': 'The 3D view stopped unexpectedly.'
     };
-    el('runtime-error-message').textContent =
-      messages[reason] ||
-      'The 3D view stopped unexpectedly. Your progress in this run was paused so nothing keeps happening off-screen.';
+    el('runtime-error-message').textContent = `${prefixes[reason] || prefixes['frame-exception']} ${pausedSuffix}`;
     banner.hidden = false;
   }
 
