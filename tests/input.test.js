@@ -60,7 +60,9 @@ describe('InputController.sample', () => {
     input.setTouchAxis(3, 4);
     expect(input.touch.x).toBeCloseTo(0.6, 6);
     expect(input.touch.z).toBeCloseTo(0.8, 6);
-    expect(input.sample()).toMatchObject({ moveX: -0.6, moveZ: 0.8 });
+    const sample = input.sample();
+    expect(sample.moveX).toBeCloseTo(-0.6, 6);
+    expect(sample.moveZ).toBeCloseTo(0.8, 6);
     input.setTouchAxis(0.3, 0.4);
     expect(input.touch.x).toBeCloseTo(0.3, 6);
   });
