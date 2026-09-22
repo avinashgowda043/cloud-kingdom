@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { InputController } from '../src/game/input.js';
+import { createPlayerState, stepPlayer } from '../src/game/physics.js';
 
 describe('InputController.sample', () => {
   it('reports no movement by default', () => {
@@ -38,6 +39,20 @@ describe('InputController.sample', () => {
       expect(input.sample().moveX).toBe(-1);
       input.keys.clear();
     }
+  });
+
+  it('moves physics left and right in the camera-facing world directions', () => {
+    const leftInput = new InputController();
+    const leftPlayer = createPlayerState({ x: 0, y: 1, z: 0 });
+    leftInput.keys.add('ArrowLeft');
+    stepPlayer(leftPlayer, leftInput.sample(), [], 1 / 60, 0);
+    expect(leftPlayer.velocity.x).toBeGreaterThan(0);
+
+    const rightInput = new InputController();
+    const rightPlayer = createPlayerState({ x: 0, y: 1, z: 0 });
+    rightInput.keys.add('ArrowRight');
+    stepPlayer(rightPlayer, rightInput.sample(), [], 1 / 60, 0);
+    expect(rightPlayer.velocity.x).toBeLessThan(0);
   });
 
   it('clamps the touch stick to the unit circle', () => {
