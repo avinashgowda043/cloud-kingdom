@@ -283,7 +283,12 @@ async function boot() {
     ui.victory.hidden = true;
     ui.hud.hidden = true;
     ui.touch.hidden = true;
-    el('runtime-error').hidden = false;
+    const banner = el('runtime-error');
+    el('runtime-error-message').textContent =
+      reason === 'webglcontextlost'
+        ? 'The graphics context was lost (this can happen when the GPU is under heavy load or memory pressure). Your progress in this run was paused so nothing keeps happening off-screen.'
+        : 'The 3D view stopped unexpectedly. Your progress in this run was paused so nothing keeps happening off-screen.';
+    banner.hidden = false;
   }
 
   el('runtime-error-reload').addEventListener('click', () => window.location.reload());
@@ -303,6 +308,12 @@ async function boot() {
   canvas.addEventListener(
     'webglcontextrestored',
     () => {
+      // The renderer's GPU resources (textures, buffers, shaders) are gone
+      // after a loss and are not automatically recreated in place, so we
+      // don't attempt to resume rendering here — the runtime-error banner's
+      // reload button (shown by the contextlost handler above) is the
+      // supported recovery path. This log exists purely so a restore isn't
+      // silent when diagnosing a report.
       console.warn('[Cloud Kingdom] WebGL context restored; reload to resume playing.');
     },
     false
@@ -339,6 +350,14 @@ async function boot() {
       }
 
       world.update(state, dt);
+
+      // Non-finite camera state (e.g. a NaN sneaking in from world.update's
+      // own animation math, in any mode including the title screen) would
+      // otherwise render a blank/garbled frame without ever throwing.
+      const cam = world.camera.position;
+      if (!Number.isFinite(cam.x) || !Number.isFinite(cam.y) || !Number.isFinite(cam.z)) {
+        throw new Error('Camera position became non-finite');
+      }
     } catch (error) {
       haltAfterFailure('frame-exception', error);
       return;
