@@ -15,6 +15,7 @@ const MOVE_KEYS = {
 };
 
 const JUMP_KEYS = new Set(['Space', 'KeyZ', 'KeyJ']);
+const SCREEN_X_TO_WORLD_X = -1;
 
 export class InputController {
   constructor() {
@@ -103,6 +104,11 @@ export class InputController {
     }
     const jumpPressed = this.jumpQueued;
     this.jumpQueued = false;
-    return { moveX: x, moveZ: z, jumpPressed, jumpHeld: this.jumpHeld };
+    return {
+      moveX: x === 0 ? 0 : x * SCREEN_X_TO_WORLD_X,
+      moveZ: z,
+      jumpPressed,
+      jumpHeld: this.jumpHeld
+    };
   }
 }
