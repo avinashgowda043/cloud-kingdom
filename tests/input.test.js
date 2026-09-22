@@ -25,7 +25,7 @@ describe('InputController.sample', () => {
     expect(cancelled.moveX).toBe(-1);
   });
 
-  it('maps keyboard left and right to the camera-facing world directions', () => {
+  it('maps left keys to positive world X and right keys to negative world X', () => {
     const input = new InputController();
 
     for (const code of ['ArrowLeft', 'KeyA']) {
@@ -41,7 +41,7 @@ describe('InputController.sample', () => {
     }
   });
 
-  it('moves physics left and right in the camera-facing world directions', () => {
+  it('moves physics toward positive world X for left and negative world X for right', () => {
     const leftInput = new InputController();
     const leftPlayer = createPlayerState({ x: 0, y: 1, z: 0 });
     leftInput.keys.add('ArrowLeft');

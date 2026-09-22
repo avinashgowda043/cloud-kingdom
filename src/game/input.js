@@ -87,7 +87,7 @@ export class InputController {
     this.jumpQueued = false;
   }
 
-  /** Reads and clears per-frame edge state. */
+  /** Reads world-space movement axes and clears per-frame edge state. */
   sample() {
     let x = this.touch.x;
     let z = this.touch.z;
