@@ -80,6 +80,11 @@ export class InputController {
     this.jumpHeld = down;
   }
 
+  /** Drops queued edges, e.g. when the game is paused or a menu is shown. */
+  clearEdges() {
+    this.jumpQueued = false;
+  }
+
   /** Reads and clears per-frame edge state. */
   sample() {
     let x = this.touch.x;

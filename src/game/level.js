@@ -4,13 +4,13 @@
  */
 
 let nextId = 0;
-const id = () => `p${nextId++}`;
+const id = (prefix) => `${prefix}${nextId++}`;
 
 /** Creates a platform whose *top* surface sits at `top`. */
 function island(x, top, z, w, d, options = {}) {
   const h = options.h ?? 1.2;
   return {
-    id: id(),
+    id: id('platform'),
     x,
     y: top - h / 2,
     z,
@@ -24,16 +24,16 @@ function island(x, top, z, w, d, options = {}) {
 }
 
 function coin(x, y, z) {
-  return { id: id(), x, y, z, collected: false };
+  return { id: id('coin'), x, y, z, collected: false };
 }
 
 function enemy(from, to, speed, phase = 0) {
-  return { id: id(), from, to, speed, phase, alive: true };
+  return { id: id('enemy'), from, to, speed, phase, alive: true };
 }
 
 function hazard(x, y, z, options = {}) {
   return {
-    id: id(),
+    id: id('hazard'),
     x,
     y,
     z,
@@ -43,7 +43,7 @@ function hazard(x, y, z, options = {}) {
 }
 
 function checkpoint(x, y, z) {
-  return { id: id(), x, y, z, reached: false };
+  return { id: id('checkpoint'), x, y, z, reached: false };
 }
 
 /**

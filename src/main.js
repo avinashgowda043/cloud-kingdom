@@ -115,6 +115,8 @@ async function boot() {
 
   function setMode(next) {
     mode = next;
+    // Keys pressed in a menu must not trigger a jump on the first play frame.
+    input.clearEdges();
     ui.title.hidden = next !== 'title';
     ui.pause.hidden = next !== 'paused';
     ui.victory.hidden = next !== 'victory';

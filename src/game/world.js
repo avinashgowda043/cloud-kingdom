@@ -401,11 +401,6 @@ export class World {
     this.camera.lookAt(player.position.x * 0.8, player.position.y + 1.2, player.position.z + 3);
   }
 
-  /** Renders a single frame without advancing gameplay (menus, pause). */
-  render() {
-    this.renderer.render(this.scene, this.camera);
-  }
-
   resize() {
     const width = window.innerWidth;
     const height = window.innerHeight;

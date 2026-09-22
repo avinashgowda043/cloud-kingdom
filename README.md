@@ -111,9 +111,9 @@ To enable publishing:
 - Local best-score storage is per-browser and best-effort; it is ignored if storage is blocked.
 - The Three.js bundle is around 550 kB (≈140 kB gzipped), so the first load needs a moment on slow
   connections.
-- Automated tests cover the pure gameplay logic (physics, collisions, scoring, level rules). Rendering
-  was verified manually with a headless Chromium smoke test; there is no automated visual regression
-  testing.
+- Automated tests cover the pure gameplay logic (physics, collisions, scoring, level rules and input
+  handling). Rendering was verified manually with a headless Chromium smoke test; there is no
+  automated visual regression testing.
 
 ## Licence
 
