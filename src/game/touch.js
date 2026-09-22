@@ -13,14 +13,23 @@
  */
 
 /**
+ * @param {{width: number}} rect
+ * @returns {number} the usable stick radius, or 0 if the rect is invalid
+ */
+export function stickRadius(rect) {
+  const radius = (rect?.width || 0) / 2;
+  return Number.isFinite(radius) && radius > 0 ? radius : 0;
+}
+
+/**
  * @param {{left: number, top: number, width: number, height: number}} rect
  * @param {number} clientX
  * @param {number} clientY
  * @returns {{x: number, z: number}} clamped axis in the range [-1, 1]
  */
 export function computeStickAxis(rect, clientX, clientY) {
-  const radius = (rect?.width || 0) / 2;
-  if (!Number.isFinite(radius) || radius <= 0) return { x: 0, z: 0 };
+  const radius = stickRadius(rect);
+  if (radius <= 0) return { x: 0, z: 0 };
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return { x: 0, z: 0 };
 
   const dx = (clientX - (rect.left + radius)) / radius;

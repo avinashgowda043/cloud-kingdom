@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeStickAxis } from '../src/game/touch.js';
+import { computeStickAxis, stickRadius } from '../src/game/touch.js';
 
 const rect = (overrides = {}) => ({ left: 100, top: 100, width: 120, height: 120, ...overrides });
 
@@ -37,5 +37,18 @@ describe('computeStickAxis', () => {
   it('returns neutral for a negative/non-finite rect width', () => {
     expect(computeStickAxis(rect({ width: -10 }), 160, 160)).toEqual({ x: 0, z: 0 });
     expect(computeStickAxis(rect({ width: NaN }), 160, 160)).toEqual({ x: 0, z: 0 });
+  });
+});
+
+describe('stickRadius', () => {
+  it('returns half the rect width', () => {
+    expect(stickRadius(rect())).toBe(60);
+  });
+
+  it('returns 0 for invalid or missing rects', () => {
+    expect(stickRadius(rect({ width: 0 }))).toBe(0);
+    expect(stickRadius(rect({ width: -10 }))).toBe(0);
+    expect(stickRadius(rect({ width: NaN }))).toBe(0);
+    expect(stickRadius(undefined)).toBe(0);
   });
 });

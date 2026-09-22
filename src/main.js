@@ -5,7 +5,7 @@ import { createGameState, updateGame, levelProgress, computeScore } from './game
 import { InputController } from './game/input.js';
 import { AudioEngine } from './game/audio.js';
 import { loadBest, saveBest } from './game/storage.js';
-import { computeStickAxis } from './game/touch.js';
+import { computeStickAxis, stickRadius } from './game/touch.js';
 
 const FIXED_STEP = 1 / 120;
 const MAX_FRAME = 0.1;
@@ -193,7 +193,7 @@ async function boot() {
     const rect = stick.getBoundingClientRect();
     const { x: clampedX, z: clampedY } = computeStickAxis(rect, event.clientX, event.clientY);
     input.setTouchAxis(clampedX, -clampedY);
-    const radius = (rect.width || 0) / 2;
+    const radius = stickRadius(rect);
     knob.style.transform = `translate(${clampedX * radius * 0.5}px, ${clampedY * radius * 0.5}px)`;
   };
 
@@ -296,7 +296,7 @@ async function boot() {
       // don't attempt in-place GPU-resource recreation here — pausing and
       // asking for a reload is the safe option for a scene this size.
       event.preventDefault();
-      haltAfterFailure('webglcontextlost');
+      haltAfterFailure('webglcontextlost', event);
     },
     false
   );
