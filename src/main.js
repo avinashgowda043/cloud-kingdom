@@ -5,22 +5,34 @@ import { createGameState, updateGame, levelProgress, computeScore } from './game
 import { InputController } from './game/input.js';
 import { AudioEngine } from './game/audio.js';
 import { loadBest, saveBest } from './game/storage.js';
+import { computeStickAxis } from './game/touch.js';
 
 const FIXED_STEP = 1 / 120;
 const MAX_FRAME = 0.1;
 
 const el = (id) => document.getElementById(id);
 
+// THREE.WebGLRenderer only ever requests a "webgl2" context (see
+// three/src/renderers/WebGLRenderer.js), so a device/browser that only
+// exposes WebGL1 will fail inside `new World(...)` even though a generic
+// "webgl" or "webgl2 || webgl" probe would report success. Checking for
+// webgl2 specifically here avoids promising support the renderer can't use,
+// and lets the fallback message be shown immediately instead of after a
+// failed World construction.
 function webglAvailable() {
   try {
     const canvas = document.createElement('canvas');
-    return !!(
-      window.WebGLRenderingContext &&
-      (canvas.getContext('webgl2') || canvas.getContext('webgl'))
-    );
+    return !!(window.WebGLRenderingContext && canvas.getContext('webgl2'));
   } catch {
     return false;
   }
+}
+
+/** Shows the startup fallback UI and logs *why*, so a blank/failed boot is never silent. */
+function showStartupFailure(reason, error) {
+  console.error(`[Cloud Kingdom] startup failed (${reason})`, error);
+  const banner = el('webgl-error');
+  banner.hidden = false;
 }
 
 function formatTime(seconds) {
@@ -30,7 +42,7 @@ function formatTime(seconds) {
 
 async function boot() {
   if (!webglAvailable()) {
-    el('webgl-error').hidden = false;
+    showStartupFailure('no-webgl2-context');
     return;
   }
 
@@ -38,8 +50,7 @@ async function boot() {
   try {
     ({ World } = await import('./game/world.js'));
   } catch (error) {
-    console.error(error);
-    el('webgl-error').hidden = false;
+    showStartupFailure('world-module-import', error);
     return;
   }
 
@@ -52,8 +63,7 @@ async function boot() {
   try {
     world = new World(el('scene'), level, { reducedMotion });
   } catch (error) {
-    console.error(error);
-    el('webgl-error').hidden = false;
+    showStartupFailure('world-construction', error);
     return;
   }
 
@@ -181,12 +191,9 @@ async function boot() {
   const stickMove = (event) => {
     if (stickPointer !== event.pointerId) return;
     const rect = stick.getBoundingClientRect();
-    const radius = rect.width / 2;
-    const dx = (event.clientX - (rect.left + radius)) / radius;
-    const dy = (event.clientY - (rect.top + radius)) / radius;
-    const clampedX = Math.max(-1, Math.min(1, dx));
-    const clampedY = Math.max(-1, Math.min(1, dy));
+    const { x: clampedX, z: clampedY } = computeStickAxis(rect, event.clientX, event.clientY);
     input.setTouchAxis(clampedX, -clampedY);
+    const radius = (rect.width || 0) / 2;
     knob.style.transform = `translate(${clampedX * radius * 0.5}px, ${clampedY * radius * 0.5}px)`;
   };
 
@@ -253,29 +260,89 @@ async function boot() {
     if (document.hidden && mode === 'playing') setMode('paused');
   });
 
+  // --- Runtime failure / context-loss handling -------------------------------
+  // If something goes wrong mid-run (an exception in the update/render path,
+  // NaN state, or the GPU dropping the WebGL context) we must not keep
+  // silently scheduling frames against a canvas that renders nothing while
+  // the touch/HUD overlays stay visible on top of it. `running` gates the
+  // rAF loop so it can only ever be scheduled once and never restarts itself
+  // after a failure.
+  let running = true;
+
+  function haltAfterFailure(reason, error) {
+    if (!running) return;
+    running = false;
+    console.error(`[Cloud Kingdom] halting after runtime failure (${reason})`, error);
+    mode = 'paused';
+    input.clearEdges();
+    input.keys.clear();
+    input.jumpHeld = false;
+    input.setTouchAxis(0, 0);
+    ui.title.hidden = true;
+    ui.pause.hidden = true;
+    ui.victory.hidden = true;
+    ui.hud.hidden = true;
+    ui.touch.hidden = true;
+    el('runtime-error').hidden = false;
+  }
+
+  el('runtime-error-reload').addEventListener('click', () => window.location.reload());
+
+  const canvas = world.renderer.domElement;
+  canvas.addEventListener(
+    'webglcontextlost',
+    (event) => {
+      // preventDefault signals the browser we'd like a restore event, but we
+      // don't attempt in-place GPU-resource recreation here — pausing and
+      // asking for a reload is the safe option for a scene this size.
+      event.preventDefault();
+      haltAfterFailure('webglcontextlost');
+    },
+    false
+  );
+  canvas.addEventListener(
+    'webglcontextrestored',
+    () => {
+      console.warn('[Cloud Kingdom] WebGL context restored; reload to resume playing.');
+    },
+    false
+  );
+
   // --- Main loop ------------------------------------------------------------
   let last = performance.now();
   let accumulator = 0;
 
   function frame(now) {
+    if (!running) return;
     const dt = Math.min((now - last) / 1000, MAX_FRAME);
     last = now;
 
-    if (mode === 'playing') {
-      accumulator += dt;
-      const sample = input.sample();
-      let stepInput = sample;
-      while (accumulator >= FIXED_STEP) {
-        handleEvents(updateGame(state, stepInput, FIXED_STEP));
-        // Jump edges are only consumed by the first sub-step.
-        stepInput = { ...stepInput, jumpPressed: false };
-        accumulator -= FIXED_STEP;
-        if (mode !== 'playing') break;
-      }
-      refreshHud();
-    }
+    try {
+      if (mode === 'playing') {
+        accumulator += dt;
+        const sample = input.sample();
+        let stepInput = sample;
+        while (accumulator >= FIXED_STEP) {
+          handleEvents(updateGame(state, stepInput, FIXED_STEP));
+          // Jump edges are only consumed by the first sub-step.
+          stepInput = { ...stepInput, jumpPressed: false };
+          accumulator -= FIXED_STEP;
+          if (mode !== 'playing') break;
+        }
 
-    world.update(state, dt);
+        const p = state.player.position;
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) {
+          throw new Error('Player position became non-finite');
+        }
+
+        refreshHud();
+      }
+
+      world.update(state, dt);
+    } catch (error) {
+      haltAfterFailure('frame-exception', error);
+      return;
+    }
 
     requestAnimationFrame(frame);
   }

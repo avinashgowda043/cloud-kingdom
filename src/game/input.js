@@ -66,8 +66,18 @@ export class InputController {
     this.listeners = [];
   }
 
-  /** Called by the on-screen stick. Values are clamped to the unit circle. */
+  /**
+   * Called by the on-screen stick. Values are clamped to the unit circle.
+   * Non-finite input (e.g. from a malformed touch-geometry read before
+   * layout has settled) is treated as neutral instead of poisoning the
+   * simulation with NaN/Infinity.
+   */
   setTouchAxis(x, z) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) {
+      this.touch.x = 0;
+      this.touch.z = 0;
+      return;
+    }
     const length = Math.hypot(x, z);
     if (length > 1) {
       x /= length;

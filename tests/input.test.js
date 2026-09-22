@@ -100,4 +100,19 @@ describe('InputController.sample', () => {
     input.clearEdges();
     expect(input.sample().jumpPressed).toBe(false);
   });
+
+  it('treats non-finite touch axis input as neutral instead of poisoning state with NaN', () => {
+    // Guards against a malformed touch-geometry read (e.g. a zero-size stick
+    // rect) ever reaching the simulation/camera as NaN/Infinity.
+    const input = new InputController();
+    input.setTouchAxis(NaN, 0.5);
+    expect(input.touch).toEqual({ x: 0, z: 0 });
+    expect(input.sample()).toMatchObject({ moveX: 0, moveZ: 0 });
+
+    input.setTouchAxis(Infinity, -Infinity);
+    expect(input.touch).toEqual({ x: 0, z: 0 });
+
+    input.setTouchAxis(0.5, 0.5);
+    expect(input.touch.x).toBeCloseTo(0.5, 6);
+  });
 });
