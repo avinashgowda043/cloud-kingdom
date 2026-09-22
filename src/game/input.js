@@ -15,6 +15,8 @@ const MOVE_KEYS = {
 };
 
 const JUMP_KEYS = new Set(['Space', 'KeyZ', 'KeyJ']);
+// The camera looks toward +Z, so screen-right points toward negative world X.
+const SCREEN_X_TO_WORLD_X = -1;
 
 export class InputController {
   constructor() {
@@ -85,7 +87,7 @@ export class InputController {
     this.jumpQueued = false;
   }
 
-  /** Reads and clears per-frame edge state. */
+  /** Reads world-space movement axes and clears per-frame edge state. */
   sample() {
     let x = this.touch.x;
     let z = this.touch.z;
@@ -103,6 +105,12 @@ export class InputController {
     }
     const jumpPressed = this.jumpQueued;
     this.jumpQueued = false;
-    return { moveX: x, moveZ: z, jumpPressed, jumpHeld: this.jumpHeld };
+    return {
+      // Keep neutral and cancelled input as canonical zero instead of -0.
+      moveX: x === 0 ? 0 : x * SCREEN_X_TO_WORLD_X,
+      moveZ: z,
+      jumpPressed,
+      jumpHeld: this.jumpHeld
+    };
   }
 }
